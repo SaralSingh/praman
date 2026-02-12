@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use App\Models\PramanSession;
 use Illuminate\Support\Carbon;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 
@@ -59,6 +60,7 @@ class UserController extends Controller
 
         return response()->json([
             'status' => true,
+            'total' => $lists->count(),
             'data' => $lists
         ]);
     }
@@ -293,13 +295,15 @@ public function deleteList(ListModel $list)
 
 
 
+public function logout(Request $request)
+{
+    Auth::logout();                       // user logout
+    $request->session()->invalidate();    // session destroy
+    $request->session()->regenerateToken(); // new CSRF token
 
-    public function logout(Request $request)
-    {
-        $request->user()->currentAccessToken()->delete();
-        return response()->json([
-            'status' => true,
-            'message' => 'Logged out successfully'
-        ]);
-    }
+    return response()->json([
+        'status' => true,
+        'message' => 'Logged out successfully'
+    ]);
+}
 }

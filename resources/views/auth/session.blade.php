@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
     <title>Active Session | Praman v2</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -171,162 +173,165 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script>
-        const token = localStorage.getItem('praman_token');
-        // Blade Template Variable (kept as requested)
-        const sessionId = {{ $sessionId }};
+<script>
+    // Blade variable (unchanged)
+    const sessionId = {{ $sessionId }};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
-        let markedSet = new Set();
-        let allPeopleIds = [];
+    let markedSet = new Set();
+    let allPeopleIds = [];
 
-        // 1. Load Session
-        async function loadSession() {
-            try {
-                const res = await fetch(`/api/sessions/${sessionId}/people`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+    // 1. Load Session
+    async function loadSession() {
+        try {
+            const res = await fetch(`/api/sessions/${sessionId}/people`, {
+                headers: {
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!res.ok) throw new Error("Failed to load session");
+
+            const data = await res.json();
+
+            // UI Updates
+            document.getElementById('session-title').innerText = data.session.title;
+
+            const dateObj = new Date(data.session.session_date + 'T00:00:00');
+            document.getElementById('session-date').innerText =
+                dateObj.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
                 });
 
-                if(!res.ok) throw new Error("Failed to load session");
+            document.getElementById('total-count').innerText =
+                `Total: ${data.people.length}`;
 
-                const data = await res.json();
+            const ul = document.getElementById('people-list');
+            ul.innerHTML = '';
+            allPeopleIds = [];
 
-                // UI Updates
-                document.getElementById('session-title').innerText = data.session.title;
-                
-                // Format Date nicely
-                const dateObj = new Date(data.session.session_date);
-                document.getElementById('session-date').innerText = dateObj.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                
-                document.getElementById('total-count').innerText = `Total: ${data.people.length}`;
+            data.people.forEach(p => {
+                allPeopleIds.push(p.id);
+                const initials = p.name.slice(0, 2).toUpperCase();
 
-                const ul = document.getElementById('people-list');
-                ul.innerHTML = '';
+                ul.innerHTML += `
+                    <li class="list-group-item d-flex justify-content-between align-items-center"
+                        id="row-${p.id}"
+                        onclick="toggleBtn(${p.id})">
 
-                allPeopleIds = []; // reset
-
-                data.people.forEach(p => {
-                    allPeopleIds.push(p.id);
-                    
-                    // Initials for Avatar
-                    const initials = p.name.slice(0, 2).toUpperCase();
-
-                    ul.innerHTML += `
-                        <li class="list-group-item d-flex justify-content-between align-items-center" 
-                            id="row-${p.id}" 
-                            onclick="toggleBtn(${p.id})">
-                            
-                            <div class="d-flex align-items-center">
-                                <div class="avatar-initial" id="avatar-${p.id}">${initials}</div>
-                                <div class="fw-semibold ms-2" style="font-size:1.1rem;">${p.name}</div>
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-initial" id="avatar-${p.id}">
+                                ${initials}
                             </div>
-                            
-                            <button 
-                                class="btn btn-outline-secondary rounded-pill px-4"
-                                id="btn-${p.id}"
-                                onclick="event.stopPropagation(); toggleBtn(${p.id});">
-                                Absent
-                            </button>
-                        </li>
-                    `;
+                            <div class="fw-semibold ms-2" style="font-size:1.1rem;">
+                                ${p.name}
+                            </div>
+                        </div>
+
+                        <button
+                            class="btn btn-outline-secondary rounded-pill px-4"
+                            id="btn-${p.id}"
+                            onclick="event.stopPropagation(); toggleBtn(${p.id});">
+                            Absent
+                        </button>
+                    </li>
+                `;
+            });
+
+        } catch (error) {
+            console.error(error);
+            alert("Error loading session data.");
+        }
+    }
+
+    // 2. Toggle Presence
+    function toggleBtn(personId) {
+        const btn = document.getElementById(`btn-${personId}`);
+        const row = document.getElementById(`row-${personId}`);
+        const countDisplay = document.getElementById('present-count');
+
+        if (markedSet.has(personId)) {
+            markedSet.delete(personId);
+
+            btn.classList.remove('btn-success', 'fw-bold', 'border-0');
+            btn.classList.add('btn-outline-secondary');
+            btn.innerHTML = 'Absent';
+
+            row.classList.remove('active-presence');
+        } else {
+            markedSet.add(personId);
+
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-success', 'fw-bold', 'border-0');
+            btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Present';
+
+            row.classList.add('active-presence');
+        }
+
+        countDisplay.innerText = markedSet.size;
+    }
+
+    // 3. Save Session (CSRF FIXED)
+    async function saveSession() {
+        if (!confirm("Are you sure you want to save and close this session?")) return;
+
+        const overlay = document.getElementById('saving-overlay');
+        const progressBar = document.getElementById('save-progress-bar');
+        const statusText = document.getElementById('save-status-text');
+
+        overlay.classList.remove('d-none');
+
+        try {
+            const total = allPeopleIds.length;
+
+            for (let i = 0; i < total; i++) {
+                const personId = allPeopleIds[i];
+                const isPresent = markedSet.has(personId) ? 1 : 0;
+                const isLast = (i === total - 1);
+
+                const pct = Math.round(((i + 1) / total) * 100);
+                progressBar.style.width = `${pct}%`;
+                statusText.innerText = `Saving record ${i + 1} of ${total}...`;
+
+                const res = await fetch(`/api/sessions/${sessionId}/presence`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        person_id: personId,
+                        is_present: isPresent,
+                        final_save: isLast ? 1 : 0
+                    })
                 });
-            } catch (error) {
-                console.error(error);
-                alert("Error loading session data.");
-            }
-        }
 
-        // 2. Toggle Logic (Enhanced UI, Same Logic)
-        function toggleBtn(personId) {
-            const btn = document.getElementById(`btn-${personId}`);
-            const row = document.getElementById(`row-${personId}`);
-            const countDisplay = document.getElementById('present-count');
-
-            if (markedSet.has(personId)) {
-                // Logic: Unmark
-                markedSet.delete(personId);
-                
-                // UI: Reset to Default
-                btn.classList.remove('btn-success', 'fw-bold', 'border-0');
-                btn.classList.add('btn-outline-secondary');
-                btn.innerHTML = 'Absent';
-                
-                row.classList.remove('active-presence');
-            } else {
-                // Logic: Mark
-                markedSet.add(personId);
-                
-                // UI: Set to Active (Green)
-                btn.classList.remove('btn-outline-secondary');
-                btn.classList.add('btn-success', 'fw-bold', 'border-0');
-                btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Present';
-                
-                row.classList.add('active-presence');
-            }
-
-            // Update Counter
-            countDisplay.innerText = markedSet.size;
-        }
-
-        // 3. Save Logic (Same Logic Loop, Added Progress UI)
-        async function saveSession() {
-            if(!confirm("Are you sure you want to save and close this session?")) return;
-
-            // Show Overlay
-            const overlay = document.getElementById('saving-overlay');
-            const progressBar = document.getElementById('save-progress-bar');
-            const statusText = document.getElementById('save-status-text');
-            
-            overlay.classList.remove('d-none');
-
-            try {
-                const total = allPeopleIds.length;
-
-                for (let i = 0; i < total; i++) {
-                    const personId = allPeopleIds[i];
-                    const isPresent = markedSet.has(personId) ? 1 : 0;
-                    const isLast = (i === total - 1);
-
-                    // Update UI Progress
-                    const pct = Math.round(((i + 1) / total) * 100);
-                    progressBar.style.width = `${pct}%`;
-                    statusText.innerText = `Saving record ${i + 1} of ${total}...`;
-
-                    // Original Logic Preserved
-                    const res = await fetch(`/api/sessions/${sessionId}/presence`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            person_id: personId,
-                            is_present: isPresent,
-                            final_save: isLast ? 1 : 0
-                        })
-                    });
-
-                    if (!res.ok) {
-                        const err = await res.json();
-                        throw new Error(err.message || "Server Error");
-                    }
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.message || "Server Error");
                 }
-
-                // Success
-                statusText.innerText = "Done! Redirecting...";
-                setTimeout(() => {
-                    // Redirect as per your original code
-                    window.location.href = '/list-workspace'; 
-                }, 500);
-
-            } catch (e) {
-                alert('Something went wrong: ' + e.message);
-                overlay.classList.add('d-none'); // Hide overlay on error so user can retry
-                console.error(e);
             }
-        }
 
-        // Init
-        loadSession();
-    </script>
+            statusText.innerText = "Done! Redirecting...";
+            setTimeout(() => {
+                window.location.href = '/list-workspace';
+            }, 500);
+
+        } catch (e) {
+            alert('Something went wrong: ' + e.message);
+            overlay.classList.add('d-none');
+            console.error(e);
+        }
+    }
+    // Init
+    loadSession();
+</script>
+
 </body>
 </html>

@@ -83,11 +83,8 @@
             <div class="collapse navbar-collapse" id="navContent">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item"><a class="nav-link active fw-semibold" href="#">Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#">Sessions</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#">Settings</a></li>
                 </ul>
                 <div class="d-flex align-items-center">
-                    <span class="me-3 text-secondary small" id="user-display-name">Loading...</span>
                     <button class="btn btn-outline-danger btn-sm" id="logoutBtn">
                         <i class="fa-solid fa-right-from-bracket"></i>
                     </button>
@@ -196,39 +193,60 @@
         </div>
     </div>
 
-    <script>
-const token = localStorage.getItem('praman_token');
+<script>
+/* ---------- Helpers ---------- */
 
-document.addEventListener('DOMContentLoaded', async () => {
+function csrfToken() {
+    return document
+        .querySelector('meta[name="csrf-token"]')
+        .getAttribute('content');
+}
 
-    // Redirect if not logged in
-    if (!token) {
-        window.location.href = '/login';
-        return;
+function jsonHeaders(withCsrf = false) {
+    const headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    };
+
+    if (withCsrf) {
+        headers['X-CSRF-TOKEN'] = csrfToken();
     }
 
+    return headers;
+}
+
+
+/* ---------- Load Lists ---------- */
+
+async function loadLists() {
     const loader = document.getElementById('loader');
     const emptyState = document.getElementById('empty-state');
     const container = document.getElementById('lists-container');
 
+    // reset UI (important if function is reused)
+    loader.classList.remove('d-none');
+    emptyState.classList.add('d-none');
+    container.classList.add('d-none');
+    container.innerHTML = '';
+
     try {
         const response = await fetch('/api/lists', {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
+            credentials: 'same-origin',
+            headers: jsonHeaders()
         });
+
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
 
         const result = await response.json();
 
         loader.classList.add('d-none');
 
-        if (!response.ok) {
-            throw new Error(result.message || 'Failed to load lists');
-        }
-
-        const lists = result.data;
+        const lists = result.data || [];
+        document.getElementById('stat-lists').innerText = result.total ?? 0;
 
         if (lists.length === 0) {
             emptyState.classList.remove('d-none');
@@ -246,7 +264,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <p class="text-secondary small mb-3">
                                 List ID: ${list.id}
                             </p>
-                            <button onclick="openList(${list.id}, '${list.name}')" class="btn btn-sm btn-dark w-100">
+                            <button 
+                                onclick="openList(${list.id}, '${list.name.replace(/'/g, "\\'")}')" 
+                                class="btn btn-sm btn-dark w-100">
                                 Open List
                             </button>
                         </div>
@@ -259,68 +279,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         loader.classList.add('d-none');
         emptyState.classList.remove('d-none');
-        console.error(error.message);
+        console.error(error);
     }
+}
 
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadLists();
 });
 
 
-document.getElementById('createListForm').addEventListener('submit', async function(e) {
+/* ---------- Create List ---------- */
+
+document.getElementById('createListForm').addEventListener('submit', async function (e) {
     e.preventDefault();
 
-    const name = document.getElementById('new-list-name').value;
+    const input = document.getElementById('new-list-name');
+    const name = input.value.trim();
+    if (!name) return;
 
     const response = await fetch('/api/lists', {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
+        credentials: 'same-origin',
+        headers: jsonHeaders(true), // CSRF
         body: JSON.stringify({ name })
     });
 
     const data = await response.json();
 
-    if (response.ok) {
-        location.reload();
-    } else {
+    if (!response.ok) {
         alert(data.message || 'Error creating list');
+        return;
     }
+
+    // ✅ Reset input
+    input.value = '';
+
+    // ✅ Close modal properly
+    const modalEl = document.getElementById('createListModal');
+    const modalInstance = bootstrap.Modal.getInstance(modalEl)
+        || new bootstrap.Modal(modalEl);
+
+    modalInstance.hide();
+
+    // ✅ Refresh lists
+    loadLists();
 });
 
-// 4. Logout Logic
-        document.getElementById('logoutBtn').addEventListener('click', async () => {
-           fetch('/api/logout', {
-    method: 'POST',
-    headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-    }
-}).then(() => {
-    localStorage.removeItem('praman_token');
-    window.location.href = '/login';
-});
+
+
+/* ---------- Logout ---------- */
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    try {
+        const res = await fetch('/logout', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document
+                    .querySelector('meta[name="csrf-token"]').content
+            }
         });
 
-fetch('/api/user', {
-    method: 'GET',
-    headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${token}`
+        const data = await res.json();
+
+        if (!res.ok) {
+            alert(data.message || 'Logout failed');
+            return;
+        }
+
+        window.location.href = '/login';
+    } catch (err) {
+        console.error(err);
+        alert('Server error during logout');
     }
-})
-.then(res => res.json())
-.then(data => console.log(data));
+});
+
+
+/* ---------- Open List ---------- */
 
 function openList(id, name) {
     localStorage.setItem('current_list_id', id);
     localStorage.setItem('current_list_name', name);
     window.location.href = '/list-workspace';
 }
+</script>
 
-
-    </script>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

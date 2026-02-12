@@ -136,13 +136,16 @@
 
             try {
                 // 3. Send Request
-                const response = await fetch('api/register', { 
+                const response = await fetch('/register', { 
                     method: 'POST',
+                    credentials: 'same-origin',  
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                         // Laravel CSRF Token (Assuming this is inside a Blade file)
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+                                'X-CSRF-TOKEN': document
+            .querySelector('meta[name="csrf-token"]')
+            .getAttribute('content')
                     },
                     body: JSON.stringify(formData)
                 });

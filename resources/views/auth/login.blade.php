@@ -104,7 +104,7 @@
                 <div class="text-center mt-4 pt-3 border-top">
                     <p class="small text-secondary mb-0">
                         Don't have an account? 
-                        <a href="{{route('regsiter')}}" class="text-decoration-none fw-bold text-dark">Create one</a>
+                        <a href="{{route('register')}}" class="text-decoration-none fw-bold text-dark">Create one</a>
                     </p>
                 </div>
 
@@ -112,75 +112,73 @@
         </div>
     </div>
 
-    <script>
-        
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
 
-            // 1. UI Setup
-            const btn = document.getElementById('submitBtn');
-            const spinner = btn.querySelector('.spinner-border');
-            const generalError = document.getElementById('general-error');
-            
-            // Reset state
-            document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-            generalError.classList.add('d-none');
-            btn.disabled = true;
-            spinner.classList.remove('d-none');
+    const btn = document.getElementById('submitBtn');
+    const spinner = btn.querySelector('.spinner-border');
+    const generalError = document.getElementById('general-error');
 
-            // 2. Data
-            const formData = {
-                email: document.getElementById('email').value,
-                password: document.getElementById('password').value,
-                remember: document.getElementById('remember').checked
-            };
+    document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    generalError.classList.add('d-none');
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
 
-            try {
-                // 3. Fetch
-                const response = await fetch('api/login', { 
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
+    const formData = {
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+        remember: document.getElementById('remember').checked
+    };
 
-                const data = await response.json();
-
-                // 4. Handle Errors
-                if (response.status === 422) {
-                    // Validation errors (e.g. empty fields)
-                    for (const [key, messages] of Object.entries(data.errors)) {
-                        const input = document.getElementById(key);
-                        const errorDiv = document.getElementById(`error-${key}`);
-                        if (input && errorDiv) {
-                            input.classList.add('is-invalid');
-                            errorDiv.textContent = messages[0];
-                        }
-                    }
-                    throw new Error("Please check your input.");
-                }
-
-                if (response.status === 401 || !response.ok) {
-                    // Auth failed (Wrong password)
-                    throw new Error(data.message || 'Invalid email or password.');
-                }
-                 localStorage.setItem('praman_token', data.token);
-                // 5. Success
-                alert(data.token)
-                window.location.href = '/dashboard'; 
-
-            } catch (error) {
-                if(error.message !== "Please check your input.") {
-                    generalError.textContent = error.message;
-                    generalError.classList.remove('d-none');
-                }
-            } finally {
-                btn.disabled = false;
-                spinner.classList.add('d-none');
-            }
+    try {
+        const response = await fetch('/login', {
+            method: 'POST',
+            credentials: 'same-origin',   // ⭐ IMPORTANT
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document
+            .querySelector('meta[name="csrf-token"]')
+            .getAttribute('content')
+            },
+            body: JSON.stringify(formData)
         });
-    </script>
+
+        const data = await response.json();
+
+        if (response.status === 422) {
+            for (const [key, messages] of Object.entries(data.errors)) {
+                const input = document.getElementById(key);
+                const errorDiv = document.getElementById(`error-${key}`);
+                if (input && errorDiv) {
+                    input.classList.add('is-invalid');
+                    errorDiv.textContent = messages[0];
+                }
+            }
+            throw new Error("Please check your input.");
+        }
+
+        if (response.status === 401 || !response.ok) {
+            throw new Error(data.message || 'Invalid email or password.');
+        }
+
+        // ✅ NO TOKEN STORAGE
+        // Laravel ne already session cookie de di hai
+
+        window.location.href = '/dashboard';
+
+    } catch (error) {
+        if(error.message !== "Please check your input.") {
+            generalError.textContent = error.message;
+            generalError.classList.remove('d-none');
+        }
+    } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+    }
+});
+</script>
+
 </body>
 </html>

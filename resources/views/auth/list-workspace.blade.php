@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Workspace | Praman v2</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -103,11 +104,12 @@
             <a class="navbar-brand fw-bold text-dark" href="/dashboard">
                 <i class="fa-solid fa-check-double me-2"></i> Praman <span class="badge bg-dark ms-1" style="font-size: 0.5em; vertical-align: top;">v2.0</span>
             </a>
-            <div class="ms-auto">
-                <button class="btn btn-outline-secondary btn-sm" onclick="goBack()">
-                    <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
-                </button>
-            </div>
+<div class="ms-auto">
+    <a href="/dashboard" class="btn btn-outline-secondary btn-sm">
+        <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+    </a>
+</div>
+
         </div>
     </nav>
 
@@ -244,210 +246,211 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script>
-        const token = localStorage.getItem('praman_token');
-        const listId = localStorage.getItem('current_list_id');
-        const listName = localStorage.getItem('current_list_name');
+<script>
+    const listId = localStorage.getItem('current_list_id');
+    const listName = localStorage.getItem('current_list_name');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
-        // --- AUTH CHECK ---
-        if (!token || !listId) {
-             // window.location.href = '/login'; 
-             console.warn('Dev Mode: Token check skipped');
-        }
+    // --- BASIC CHECK ---
+    if (!listId) {
+        console.warn('List not found');
+        window.location.href = '/dashboard';
+    }
 
-        if(listName) {
-            document.getElementById('list-title').innerText = listName;
-        }
+    if (listName) {
+        document.getElementById('list-title').innerText = listName;
+    }
 
-        // --- EVENT LISTENERS ---
-        
-        // Modal Show: Load Suggestions
-        const modalEl = document.getElementById('startSessionModal');
-        modalEl.addEventListener('show.bs.modal', function () {
-            fetch(`/api/lists/${listId}/session-titles`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
-                const container = document.getElementById('suggestion-chips-container');
-                const input = document.getElementById('session-title-input');
+    // --- MODAL: Load Previous Session Titles ---
+    const modalEl = document.getElementById('startSessionModal');
 
-                container.innerHTML = '';
-                
-                // Get unique titles, take top 5
-                const uniqueTitles = [...new Set(data.sessions.map(s => s.title))].slice(0, 5);
+    modalEl.addEventListener('show.bs.modal', function () {
+        fetch(`/api/lists/${listId}/session-titles`, {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('suggestion-chips-container');
+            const input = document.getElementById('session-title-input');
 
-                if(uniqueTitles.length === 0) {
-                    container.innerHTML = '<small class="text-secondary">No recent sessions.</small>';
-                    return;
-                }
+            container.innerHTML = '';
 
-                uniqueTitles.forEach(title => {
-                    const chip = document.createElement('div');
-                    chip.className = 'suggestion-chip';
-                    chip.innerHTML = `<i class="fa-solid fa-clock-rotate-left me-2"></i>${title}`;
-                    
-                    chip.addEventListener('click', () => {
-                        input.value = title;
-                        input.focus();
-                    });
-                    
-                    container.appendChild(chip);
-                });
-            })
-            .catch(err => console.error("Error loading suggestions:", err));
-        });
+            const uniqueTitles = [...new Set(
+                (data.sessions || []).map(s => s.title)
+            )].slice(0, 5);
 
-
-        // --- CORE FUNCTIONS ---
-
-        function goBack() {
-            window.location.href = '/dashboard';
-        }
-
-        function loadPeople() {
-            fetch(`/api/lists/${listId}/people`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
-                const ul = document.getElementById('people-list');
-                const emptyState = document.getElementById('empty-state');
-                const countDisplay = document.getElementById('count-display');
-                
-                ul.innerHTML = '';
-                const count = data.data ? data.data.length : 0;
-                if(countDisplay) countDisplay.innerText = count;
-
-                if (count === 0) {
-                    emptyState.classList.remove('d-none');
-                } else {
-                    emptyState.classList.add('d-none');
-                    data.data.forEach(person => {
-                        const initials = person.name.slice(0, 2).toUpperCase();
-                        ul.innerHTML += `
-                            <li class="list-group-item">
-                                <div class="avatar-initial">${initials}</div>
-                                <div class="fw-medium text-dark">${person.name}</div>
-                            </li>
-                        `;
-                    });
-                }
-            })
-            .catch(err => console.error('Error loading people:', err));
-        }
-
-        function submitPeople() {
-            const text = document.getElementById('people-textarea').value.trim();
-            if (!text) return;
-            const names = text.split('\n').map(n => n.trim()).filter(n => n);
-
-            fetch(`/api/lists/${listId}/people/bulk`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({ names })
-            })
-            .then(res => res.json())
-            .then(() => {
-                document.getElementById('people-textarea').value = '';
-                loadPeople();
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addPeopleModal'));
-                modal.hide();
-            })
-            .catch(err => {
-                alert('Failed to add people');
-                console.error(err);
-            });
-        }
-
-        async function startSession() {
-            const title = document.getElementById('session-title-input').value.trim();
-            if (!title) {
-                alert('Enter session title');
+            if (uniqueTitles.length === 0) {
+                container.innerHTML = '<small class="text-secondary">No recent sessions.</small>';
                 return;
             }
 
-            try {
-                const res = await fetch(`/api/lists/${listId}/sessions`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ title })
+            uniqueTitles.forEach(title => {
+                const chip = document.createElement('div');
+                chip.className = 'suggestion-chip';
+                chip.innerHTML = `<i class="fa-solid fa-clock-rotate-left me-2"></i>${title}`;
+
+                chip.addEventListener('click', () => {
+                    input.value = title;
+                    input.focus();
                 });
 
-                const data = await res.json();
-                const sessionId = data.data.id;
-                
-                const modal = bootstrap.Modal.getInstance(document.getElementById('startSessionModal'));
-                modal.hide();
-
-                window.location.href = `/session/${sessionId}`;
-            } catch (err) {
-                console.error(err);
-                alert('Failed to start session');
-            }
-        }
-
-        function loadSessions() {
-            fetch(`/api/lists/${listId}/sessions`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
-                const div = document.getElementById('sessions-list');
-                div.innerHTML = '';
-
-                if(data.data.length === 0) {
-                    div.innerHTML = '<div class="text-center py-4 text-secondary small">No past sessions found.</div>';
-                    return;
-                }
-
-                data.data.forEach(s => {
-                    const d = new Date(s.session_date);
-                    const dateStr = d.toLocaleDateString();
-
-                    div.innerHTML += `
-                        <div class="session-item p-3 d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <div class="bg-light rounded p-2 text-secondary me-3">
-                                    <i class="fa-regular fa-calendar-check"></i>
-                                </div>
-                                <div>
-                                    <div class="fw-semibold text-dark small">${s.title}</div>
-                                    <div class="text-secondary" style="font-size: 0.75rem;">${dateStr}</div>
-                                </div>
-                            </div>
-                            <a href="/session-view/${s.id}" class="btn btn-sm btn-outline-dark">
-                                View <i class="fa-solid fa-angle-right ms-1"></i>
-                            </a>
-                        </div>
-                    `;
-                });
+                container.appendChild(chip);
             });
+        })
+        .catch(err => console.error('Error loading session titles:', err));
+    });
+
+    // --- LOAD PEOPLE ---
+    function loadPeople() {
+        fetch(`/api/lists/${listId}/people`, {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(data => {
+            const ul = document.getElementById('people-list');
+            const emptyState = document.getElementById('empty-state');
+            const countDisplay = document.getElementById('count-display');
+
+            ul.innerHTML = '';
+            const people = data.data || [];
+
+            if (countDisplay) countDisplay.innerText = people.length;
+
+            if (people.length === 0) {
+                emptyState.classList.remove('d-none');
+                return;
+            }
+
+            emptyState.classList.add('d-none');
+
+            people.forEach(person => {
+                const initials = person.name.slice(0, 2).toUpperCase();
+                ul.innerHTML += `
+                    <li class="list-group-item d-flex align-items-center gap-3">
+                        <div class="avatar-initial">${initials}</div>
+                        <div class="fw-medium text-dark">${person.name}</div>
+                    </li>
+                `;
+            });
+        })
+        .catch(err => console.error('Error loading people:', err));
+    }
+
+    // --- BULK ADD PEOPLE ---
+    function submitPeople() {
+        const textarea = document.getElementById('people-textarea');
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const names = text.split('\n').map(n => n.trim()).filter(Boolean);
+
+        fetch(`/api/lists/${listId}/people/bulk`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ names })
+        })
+        .then(() => {
+            textarea.value = '';
+            loadPeople();
+            bootstrap.Modal.getInstance(
+                document.getElementById('addPeopleModal')
+            ).hide();
+        })
+        .catch(err => {
+            alert('Failed to add people');
+            console.error(err);
+        });
+    }
+
+    // --- START SESSION ---
+    async function startSession() {
+        const titleInput = document.getElementById('session-title-input');
+        const title = titleInput.value.trim();
+
+        if (!title) {
+            alert('Enter session title');
+            return;
         }
 
- async function deleteCurrentList() {
+        try {
+            const res = await fetch(`/api/lists/${listId}/sessions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ title })
+            });
 
-    if (!listId || !token) {
-        alert('Missing list or auth data');
-        return;
+            const data = await res.json();
+            const sessionId = data.data.id;
+
+            bootstrap.Modal.getInstance(
+                document.getElementById('startSessionModal')
+            ).hide();
+
+            window.location.href = `/session/${sessionId}`;
+        } catch (err) {
+            console.error(err);
+            alert('Failed to start session');
+        }
     }
+
+    // --- LOAD SESSIONS ---
+    function loadSessions() {
+        fetch(`/api/lists/${listId}/sessions`, {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(data => {
+            const div = document.getElementById('sessions-list');
+            div.innerHTML = '';
+
+            const sessions = data.data || [];
+
+            if (sessions.length === 0) {
+                div.innerHTML =
+                    '<div class="text-center py-4 text-secondary small">No past sessions found.</div>';
+                return;
+            }
+
+            sessions.forEach(s => {
+                const d = new Date(s.session_date + 'T00:00:00');
+                const dateStr = d.toLocaleDateString();
+
+                div.innerHTML += `
+                    <div class="session-item p-3 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-light rounded p-2 text-secondary me-3">
+                                <i class="fa-regular fa-calendar-check"></i>
+                            </div>
+                            <div>
+                                <div class="fw-semibold text-dark small">${s.title}</div>
+                                <div class="text-secondary" style="font-size: 0.75rem;">${dateStr}</div>
+                            </div>
+                        </div>
+                        <a href="/session-view/${s.id}" class="btn btn-sm btn-outline-dark">
+                            View <i class="fa-solid fa-angle-right ms-1"></i>
+                        </a>
+                    </div>
+                `;
+            });
+        });
+    }
+
+    // --- DELETE LIST ---
+async function deleteCurrentList() {
+    if (!listId) return;
 
     const confirmDelete = confirm(`Delete list "${listName}" ?`);
     if (!confirmDelete) return;
@@ -456,36 +459,40 @@
         const response = await fetch(`/api/lists/${listId}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': 'Bearer ' + token,
-                'Accept': 'application/json'
-            }
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            credentials: 'same-origin'
         });
 
         const data = await response.json();
 
-        if (response.ok) {
-            
-            // cleanup
-            localStorage.removeItem('current_list_id');
-            localStorage.removeItem('current_list_name');
-
-            window.location.href = '/dashboard';
-        } else {
-            alert(data.message || 'Delete failed');
+        // ❗ IMPORTANT PART
+        if (!response.ok) {
+            alert(data.message || 'Unable to delete list.');
+            return; // ⛔ stop here
         }
+
+        // ✅ Only when delete SUCCESS
+        localStorage.removeItem('current_list_id');
+        localStorage.removeItem('current_list_name');
+
+        window.location.href = '/dashboard';
 
     } catch (err) {
         console.error(err);
-        alert('Server error');
+        alert('Server error while deleting list.');
     }
 }
 
-        // --- INIT ---
-        if(listId) {
-            loadPeople();
-            loadSessions();
-        }
-    </script>
+
+    // --- INIT ---
+    if (listId) {
+        loadPeople();
+        loadSessions();
+    }
+</script>
+
 
 </body>
 </html>

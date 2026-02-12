@@ -3,13 +3,15 @@
 use App\Http\Controllers\Api\Private\UserController as PrivateUserController;
 use App\Http\Controllers\AuthController\UserController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
+
 
 
 Route::post('/register', [UserController::class, 'register']);
 Route::post('/login', [UserController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user', [PrivateUserController::class, 'index']);
+    // Route::get('/user', fn (Request $r) => $r->user());
 
     Route::post('lists', [PrivateUserController::class, 'createList']);
     Route::get('/lists', [PrivateUserController::class, 'getLists']);
@@ -25,6 +27,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/lists/{list}/session-titles', [PrivateUserController::class, 'loadSessionNames']);
     Route::delete('/lists/{list}', [PrivateUserController::class, 'deleteList']);
 
-
-    Route::post('/logout', [PrivateUserController::class, 'logout']);
 });

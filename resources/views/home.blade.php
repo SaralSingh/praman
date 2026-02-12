@@ -67,14 +67,14 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
-                    <li class="nav-item"><a class="nav-link" href="#how-it-works">How it Works</a></li>
+                    {{-- <li class="nav-item"><a class="nav-link" href="#how-it-works">How it Works</a></li>
                     <li class="nav-item"><a class="nav-link" href="#architecture">Architecture</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#api">API Docs</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#api">API Docs</a></li> --}}
                     <li class="nav-item ms-lg-3">
                         <a href="{{route('login')}}" class="btn btn-outline-dark btn-sm px-4">Log In</a>
                     </li>
                     <li class="nav-item ms-2">
-                        <a href="{{route('regsiter')}}" class="btn btn-dark btn-sm px-4">Get Started</a>
+                        <a href="{{route('register')}}" class="btn btn-dark btn-sm px-4">Get Started</a>
                     </li>
                 </ul>
             </div>
@@ -91,10 +91,10 @@
                         Praman is not just an attendance app for students. It is a rule-driven engine for classes, teams, workshops, and events. 
                         <br><strong>Create list → Start session → Mark presence.</strong>
                     </p>
-                    <div class="d-flex justify-content-center gap-3">
+                    {{-- <div class="d-flex justify-content-center gap-3">
                         <button class="btn btn-dark btn-lg px-5 shadow-sm">Create Account</button>
                         <button class="btn btn-outline-secondary btn-lg px-5">View API Spec</button>
-                    </div>
+                    </div> --}}
                 </div>
             </div>
         </div>
@@ -217,59 +217,6 @@
         </div>
     </section>
 
-    <section id="architecture" class="py-5 bg-white border-top">
-        <div class="container py-5">
-            <div class="row align-items-center">
-                <div class="col-lg-5 mb-4 mb-lg-0">
-                    <span class="badge bg-dark mb-3">Developer Preview</span>
-                    <h2 class="fw-bold">API-First Architecture</h2>
-                    <p class="text-secondary lead">
-                        Praman v2 is rebuilt from the ground up using Laravel. The UI is a layer on top of a robust, rule-driven API.
-                    </p>
-                    <ul class="list-unstyled mt-4">
-                        <li class="mb-2"><i class="fa-solid fa-database me-2 text-primary"></i> <strong>Strict Schema:</strong> Relational integrity enforced.</li>
-                        <li class="mb-2"><i class="fa-solid fa-server me-2 text-primary"></i> <strong>Logic Layer:</strong> Presence recorded only by owners.</li>
-                        <li class="mb-2"><i class="fa-solid fa-link me-2 text-primary"></i> <strong>Relationships:</strong> One list → Many sessions.</li>
-                    </ul>
-                    <a href="#" class="btn btn-outline-dark mt-3">Read Database Docs</a>
-                </div>
-                <div class="col-lg-7">
-                    <div class="code-block shadow-lg">
-                        <div class="d-flex justify-content-between border-bottom border-secondary pb-2 mb-3">
-                            <span class="text-muted small">database_schema.sql</span>
-                            <span class="text-muted small">MySQL</span>
-                        </div>
-<pre class="m-0 text-break">
-<span class="text-warning">lists</span> {
-  id: <span class="text-info">PK</span>
-  user_id: <span class="text-info">FK (users)</span>
-  name: <span class="text-success">string</span>
-}
-
-<span class="text-warning">people</span> {
-  id: <span class="text-info">PK</span>
-  list_id: <span class="text-info">FK (lists)</span>
-  name: <span class="text-success">string</span>
-}
-
-<span class="text-warning">sessions</span> {
-  id: <span class="text-info">PK</span>
-  list_id: <span class="text-info">FK (lists)</span>
-  title: <span class="text-success">string</span>
-  session_date: <span class="text-success">datetime</span>
-}
-
-<span class="text-warning">presences</span> {
-  id: <span class="text-info">PK</span>
-  session_id: <span class="text-info">FK</span>
-  person_id: <span class="text-info">FK</span>
-  is_present: <span class="text-success">boolean</span>
-}</pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <footer class="bg-dark text-white py-5">
         <div class="container">

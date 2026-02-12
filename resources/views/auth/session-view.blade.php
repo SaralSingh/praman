@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Session Report | Praman v2</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -198,134 +199,130 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
-    <script>
-        const sessionId = {{ $sessionId }};
-        const token = localStorage.getItem('praman_token');
-        
-        let allPeopleData = []; // Store data for searching/filtering
+<script>
+    const sessionId = {{ $sessionId }};
 
-        function loadSessionPeople() {
-            fetch(`/api/sessions/${sessionId}/attendance`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
+    let allPeopleData = []; // Store data for searching/filtering
 
-                if (data.session && data.session.session_date) {
-    const rawDate = data.session.session_date; // "2026-02-06"
+    function loadSessionPeople() {
+        fetch(`/api/sessions/${sessionId}/attendance`, {
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(data => {
 
-    const d = new Date(rawDate + 'T00:00:00'); 
-    // 👆 important: warna timezone shift ho sakta hai
+            // --- Session Date (safe timezone handling) ---
+            if (data.session && data.session.session_date) {
+                const rawDate = data.session.session_date;
+                const d = new Date(rawDate + 'T00:00:00');
+                const formatted = d.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                document.getElementById('session-date-display').innerText = formatted;
+            }
 
-    const formatted = d.toLocaleDateString(undefined, {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-
-    document.getElementById('session-date-display').innerText = formatted;
-}
-
-                const container = document.getElementById('people-list-container');
-                
-                // 1. Handle Empty Data
-                if(!data.people || data.people.length === 0) {
-                    container.innerHTML = `
-                        <div class="text-center py-5">
-                            <i class="fa-regular fa-folder-open fa-3x text-secondary mb-3"></i>
-                            <p class="text-secondary">No records found for this session.</p>
-                        </div>`;
-                    return;
-                }
-
-                // 2. Store data globally for search features
-                allPeopleData = data.people;
-
-                // 3. Update Header Info (If available in API response)
-                if(data.session) {
-                    document.getElementById('page-title').innerText = data.session.title || 'Session Details';
-                    if(data.session.session_date) {
-                        const d = new Date(data.session.session_date);
-                        document.getElementById('session-date-display').innerText = d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    }
-                }
-
-                // 4. Calculate Stats
-                const total = allPeopleData.length;
-                const present = allPeopleData.filter(p => p.is_present).length;
-                const absent = total - present;
-
-                document.getElementById('stat-total').innerText = total;
-                document.getElementById('stat-present').innerText = present;
-                document.getElementById('stat-absent').innerText = absent;
-
-                // 5. Render List
-                renderList(allPeopleData);
-            })
-            .catch(err => {
-                console.error(err);
-                document.getElementById('people-list-container').innerHTML = `
-                    <div class="text-center py-5 text-danger">
-                        <i class="fa-solid fa-circle-exclamation mb-2 fa-2x"></i>
-                        <p>Failed to load session data.</p>
-                    </div>`;
-            });
-        }
-
-        // Render Function
-        function renderList(people) {
             const container = document.getElementById('people-list-container');
-            
-            if(people.length === 0) {
-                container.innerHTML = '<div class="p-4 text-center text-secondary">No matching results.</div>';
+
+            // 1. Handle Empty Data
+            if (!data.people || data.people.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fa-regular fa-folder-open fa-3x text-secondary mb-3"></i>
+                        <p class="text-secondary">No records found for this session.</p>
+                    </div>`;
                 return;
             }
 
-            let html = `<ul class="list-group list-group-flush">`;
+            // 2. Store data globally for search features
+            allPeopleData = data.people;
 
-            people.forEach(p => {
-                // Generate Initials
-                const initials = p.name.slice(0, 2).toUpperCase();
-                
-                // Determine Badge Style
-                const badgeClass = p.is_present ? 'badge-present' : 'badge-absent';
-                const badgeIcon = p.is_present ? '<i class="fa-solid fa-check me-1"></i>' : '<i class="fa-solid fa-xmark me-1"></i>';
-                const badgeText = p.is_present ? 'Present' : 'Absent';
-                const rowBg = p.is_present ? '' : 'bg-light'; // Slight highlight for absent rows
+            // 3. Update Header Info
+            if (data.session) {
+                document.getElementById('page-title').innerText =
+                    data.session.title || 'Session Details';
+            }
 
-                html += `
-                    <li class="list-group-item d-flex justify-content-between align-items-center ${rowBg}">
-                        <div class="d-flex align-items-center">
-                            <div class="avatar-initial">${initials}</div>
-                            <div>
-                                <div class="fw-semibold text-dark">${p.name}</div>
-                            </div>
+            // 4. Calculate Stats
+            const total = allPeopleData.length;
+            const present = allPeopleData.filter(p => p.is_present).length;
+            const absent = total - present;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-present').innerText = present;
+            document.getElementById('stat-absent').innerText = absent;
+
+            // 5. Render List
+            renderList(allPeopleData);
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('people-list-container').innerHTML = `
+                <div class="text-center py-5 text-danger">
+                    <i class="fa-solid fa-circle-exclamation mb-2 fa-2x"></i>
+                    <p>Failed to load session data.</p>
+                </div>`;
+        });
+    }
+
+    // Render Function
+    function renderList(people) {
+        const container = document.getElementById('people-list-container');
+
+        if (people.length === 0) {
+            container.innerHTML =
+                '<div class="p-4 text-center text-secondary">No matching results.</div>';
+            return;
+        }
+
+        let html = `<ul class="list-group list-group-flush">`;
+
+        people.forEach(p => {
+            const initials = p.name.slice(0, 2).toUpperCase();
+            const badgeClass = p.is_present ? 'badge-present' : 'badge-absent';
+            const badgeIcon = p.is_present
+                ? '<i class="fa-solid fa-check me-1"></i>'
+                : '<i class="fa-solid fa-xmark me-1"></i>';
+            const badgeText = p.is_present ? 'Present' : 'Absent';
+            const rowBg = p.is_present ? '' : 'bg-light';
+
+            html += `
+                <li class="list-group-item d-flex justify-content-between align-items-center ${rowBg}">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-initial">${initials}</div>
+                        <div>
+                            <div class="fw-semibold text-dark">${p.name}</div>
                         </div>
-                        <span class="${badgeClass} small">
-                            ${badgeIcon}${badgeText}
-                        </span>
-                    </li>
-                `;
-            });
+                    </div>
+                    <span class="${badgeClass} small">
+                        ${badgeIcon}${badgeText}
+                    </span>
+                </li>
+            `;
+        });
 
-            html += `</ul>`;
-            container.innerHTML = html;
-        }
+        html += `</ul>`;
+        container.innerHTML = html;
+    }
 
-        // Simple Client-Side Search
-        function filterList() {
-            const query = document.getElementById('search-input').value.toLowerCase();
-            const filtered = allPeopleData.filter(p => p.name.toLowerCase().includes(query));
-            renderList(filtered);
-        }
+    // Client-Side Search
+    function filterList() {
+        const query = document.getElementById('search-input').value.toLowerCase();
+        const filtered = allPeopleData.filter(p =>
+            p.name.toLowerCase().includes(query)
+        );
+        renderList(filtered);
+    }
 
-        // Init
-        loadSessionPeople();
-    </script>
+    // Init
+    loadSessionPeople();
+</script>
+
 
 </body>
 </html>
